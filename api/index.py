@@ -125,17 +125,18 @@ sportsbook_names = {
 
 
 def calculate_ev_percentage(odds: float, fair_odds: float) -> float:
-    if odds > 0:
-        implied_probability = 100 / (odds + 100)
-    else:
-        implied_probability = abs(odds) / (abs(odds) + 100)
-    
-    if fair_odds > 0:
-        fair_probability = 100 / (fair_odds + 100)
-    else:
-        fair_probability = abs(fair_odds) / (abs(fair_odds) + 100)
-    
-    ev = (fair_probability * (odds / 100 + 1) - 1) * 100
+    # Convert American odds to implied probability
+    def odds_to_probability(odds):
+        if odds > 0:
+            return 100 / (odds + 100)
+        else:
+            return abs(odds) / (abs(odds) + 100)
+
+    implied_probability = odds_to_probability(odds)
+    fair_probability = odds_to_probability(fair_odds)
+
+    # Calculate EV%
+    ev = (fair_probability * (1 / implied_probability) - 1) * 100
     return round(ev, 2)
 
 def generate_html(sports_data: Dict[str, Events]) -> str:
@@ -252,10 +253,11 @@ def generate_html(sports_data: Dict[str, Events]) -> str:
                 <tr>
                     <th>Date</th>
                     <th>Teams</th>
-                    <th>Bet Type</th>
+                    <th>Market</th>
                     <th>Sportsbook</th>
                     <th>Odds</th>
                     <th>Fair Odds</th>
+                    <th>EV %</th>
                 </tr>
     """
 
@@ -269,28 +271,34 @@ def generate_html(sports_data: Dict[str, Events]) -> str:
             # Away team moneyline
             if isinstance(odd.away_line, int) and isinstance(calculate_fair_odds("away", event, 1), int):
                 if odd.away_line > calculate_fair_odds("away", event, 1):
+                    fair_odds = (calculate_fair_odds("away", event, 1))
+                    ev_percentage = calculate_ev_percentage(odd.away_line, fair_odds)
                     html += f"""
                     <tr>
                         <td>{date}</td>
                         <td>{teams}</td>
-                        <td>Moneyline (Away)</td>
+                        <td>{event.away_team.name} Moneyline</td>
                         <td>{sportsbook}</td>
                         <td>{odd.away_line}</td>
                         <td>{calculate_fair_odds("away", event, 1)}</td>
+                        <td>{ev_percentage}%</td>
                     </tr>
                     """
             
             # Home team moneyline
             if isinstance(odd.home_line, int) and isinstance(calculate_fair_odds("home", event, 1), int):
                 if odd.home_line > calculate_fair_odds("home", event, 1):
+                    fair_odds = (calculate_fair_odds("home", event, 1))
+                    ev_percentage = calculate_ev_percentage(odd.home_line, fair_odds)
                     html += f"""
                     <tr>
                         <td>{date}</td>
                         <td>{teams}</td>
-                        <td>Moneyline (Home)</td>
+                        <td>{event.home_team.name} Moneyline</td>
                         <td>{sportsbook}</td>
                         <td>{odd.home_line}</td>
                         <td>{calculate_fair_odds("home", event, 1)}</td>
+                        <td>{ev_percentage}%</td>
                     </tr>
                     """
 
@@ -525,7 +533,6 @@ def create_event_table(event: Event) -> str:
     """
 
     return html
-
    
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
