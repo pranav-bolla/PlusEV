@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import List, Dict
 import math
 import os
-
+# Added this comment to trigger a new deployment
 class Odds:
     def __init__(self, odds_data: Dict):
         self.sportsbook_id = odds_data.get('SportsbookID')
