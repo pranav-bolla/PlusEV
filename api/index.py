@@ -260,47 +260,56 @@ def generate_html(sports_data: Dict[str, Events]) -> str:
                     <th>EV %</th>
                 </tr>
     """
-
+    
+    processed = set() 
     for event in plus_ev:
         date = event.start_time.strftime('%Y-%m-%d %H:%M')
         teams = f"{event.away_team.name} @ {event.home_team.name}"
+        
+        # Tracks sportsbook + bet type combinations
         
         for odd in event.odds:
             sportsbook = sportsbook_names.get(odd.sportsbook_id, 'Unknown')
             
             # Away team moneyline
-            if isinstance(odd.away_line, int) and isinstance(calculate_fair_odds("away", event, 1), int):
-                if odd.away_line > calculate_fair_odds("away", event, 1):
-                    fair_odds = (calculate_fair_odds("away", event, 1))
-                    ev_percentage = calculate_ev_percentage(odd.away_line, fair_odds)
-                    html += f"""
-                    <tr>
-                        <td>{date}</td>
-                        <td>{teams}</td>
-                        <td>{event.away_team.name} Moneyline</td>
-                        <td>{sportsbook}</td>
-                        <td>{odd.away_line}</td>
-                        <td>{calculate_fair_odds("away", event, 1)}</td>
-                        <td>{ev_percentage}%</td>
-                    </tr>
-                    """
-            
+            if (sportsbook, "away", event) not in processed:
+                if isinstance(odd.away_line, int) and isinstance(calculate_fair_odds("away", event, 1), int):
+                    if odd.away_line > calculate_fair_odds("away", event, 1):
+                        fair_odds = calculate_fair_odds("away", event, 1)
+                        ev_percentage = calculate_ev_percentage(odd.away_line, fair_odds)
+                        html += f"""
+                        <tr>
+                            <td>{date}</td>
+                            <td>{teams}</td>
+                            <td>{event.away_team.name} Moneyline</td>
+                            <td>{sportsbook}</td>
+                            <td>{odd.away_line}</td>
+                            <td>{fair_odds}</td>
+                            <td>{ev_percentage}%</td>
+                        </tr>
+                        """
+                        processed.add((sportsbook, "away", event))  # Add sportsbook and "away" to processed set
+    
             # Home team moneyline
-            if isinstance(odd.home_line, int) and isinstance(calculate_fair_odds("home", event, 1), int):
-                if odd.home_line > calculate_fair_odds("home", event, 1):
-                    fair_odds = (calculate_fair_odds("home", event, 1))
-                    ev_percentage = calculate_ev_percentage(odd.home_line, fair_odds)
-                    html += f"""
-                    <tr>
-                        <td>{date}</td>
-                        <td>{teams}</td>
-                        <td>{event.home_team.name} Moneyline</td>
-                        <td>{sportsbook}</td>
-                        <td>{odd.home_line}</td>
-                        <td>{calculate_fair_odds("home", event, 1)}</td>
-                        <td>{ev_percentage}%</td>
-                    </tr>
-                    """
+            if (sportsbook, "home", event) not in processed:
+                if isinstance(odd.home_line, int) and isinstance(calculate_fair_odds("home", event, 1), int):
+                    if odd.home_line > calculate_fair_odds("home", event, 1):
+                        fair_odds = calculate_fair_odds("home", event, 1)
+                        ev_percentage = calculate_ev_percentage(odd.home_line, fair_odds)
+                        html += f"""
+                        <tr>
+                            <td>{date}</td>
+                            <td>{teams}</td>
+                            <td>{event.home_team.name} Moneyline</td>
+                            <td>{sportsbook}</td>
+                            <td>{odd.home_line}</td>
+                            <td>{fair_odds}</td>
+                            <td>{ev_percentage}%</td>
+                        </tr>
+                        """
+                        processed.add((sportsbook, "home", event))  # Add sportsbook and "home" to processed set
+    
+                        
 
     html += """
             </table>
@@ -314,8 +323,20 @@ def generate_html(sports_data: Dict[str, Events]) -> str:
     """
     return html
 
+def remove_duplicates(plus_ev_list):
+    seen = set()
+    unique_plus_ev = []
+    
+    for event in plus_ev_list:
+        event_id = event.game_id  # Assuming 'game_id' is a unique identifier
+        if event_id not in seen:
+            unique_plus_ev.append(event)
+            seen.add(event_id)
+    
+    return unique_plus_ev
 
 plus_ev = []
+
 def create_table(events: Events, bet_type: str) -> str:
     all_tables = ""
     for event in events.events:
@@ -373,7 +394,8 @@ def create_table(events: Events, bet_type: str) -> str:
         table += '</tr></table>'
         
         all_tables += table + '<hr>'  # Add a horizontal line between tables
-
+        
+        
     return all_tables
 
 def calculate_fair_odds(team, event: Event, pinnacle_id: int) -> tuple:
@@ -533,6 +555,7 @@ def create_event_table(event: Event) -> str:
     """
 
     return html
+
    
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
