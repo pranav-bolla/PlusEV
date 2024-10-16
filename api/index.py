@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import List, Dict
 import math
 import os
-# Added this comment to trigger a new deployment
+
 class Odds:
     def __init__(self, odds_data: Dict):
         self.sportsbook_id = odds_data.get('SportsbookID')
@@ -92,6 +92,17 @@ class NFLEvents(Events):
 class MLBEvents(Events):
     def add_event(self, event_data: Dict):
         self.events.append(MLBEvent(event_data))
+        
+class NHLEvent(Event):
+    def __init__(self, event_data: Dict):
+        super().__init__(event_data)
+        self.period1_score = event_data.get('Period1Score')
+        self.period2_score = event_data.get('Period2Score')
+        self.period3_score = event_data.get('Period3Score')
+
+class NHLEvents(Events):
+    def add_event(self, event_data: Dict):
+        self.events.append(NHLEvent(event_data))
 
 def fetch_sports_data(url: str, event_class: type) -> Events:
     response = requests.get(url)
@@ -103,63 +114,78 @@ def fetch_sports_data(url: str, event_class: type) -> Events:
     
     return events
 
+# BookMaker is 5
 sportsbook_names = {
     1: 'Pinnacle',
-    5: 'BookMaker',
     89: 'FanDuel',
     83: 'DraftKings',
     28: 'Caesars',
     87: 'BetMGM',
-    85: 'BetRivers'
+    85: 'BetRivers',
+    8: 'bet365',
+    86: 'PointsBet',
+    98: 'Bet99',
+    100: 'BetVictor',
+    101: 'Betano',
+    139: 'theScore'
 }
 
-def find_plus_ev_bets(events: Events) -> List[Dict]:
+def find_plus_ev_bets(sports_data: Dict[str, Events]) -> List[Dict]:
     plus_ev_bets = []
-    for event in events.events:
-        for odd in event.odds:
-            if odd.line_type == 1:  # Full game odds
-                fair_away_odds = calculate_fair_odds("away", event, 1, 1)
-                fair_home_odds = calculate_fair_odds("home", event, 1, 1)
+    for sport, events in sports_data.items():
+        for event in events.events:
+            for odd in event.odds:
+                line_type_name = get_line_type_name(odd.line_type)
+                fair_away_odds = calculate_fair_odds("away", event, 1, odd.line_type)
+                fair_home_odds = calculate_fair_odds("home", event, 1, odd.line_type)
                 
-                if isinstance(odd.away_line, int) and isinstance(fair_away_odds, int):
+                if isinstance(odd.away_line, (int, float)) and isinstance(fair_away_odds, (int, float)):
                     ev_away = calculate_ev_percentage(odd.away_line, fair_away_odds)
                     if ev_away > 0:
                         plus_ev_bets.append({
+                            'sport': sport,
+                            'line_type': line_type_name,
                             'game': f"{event.away_team.name} @ {event.home_team.name}",
                             'team': event.away_team.name,
-                            'book': sportsbook_names[odd.sportsbook_id],
+                            'book': sportsbook_names.get(odd.sportsbook_id, 'Unknown'),
                             'odds': odd.away_line,
                             'fair_odds': fair_away_odds,
                             'ev': ev_away
                         })
                 
-                if isinstance(odd.home_line, int) and isinstance(fair_home_odds, int):
+                if isinstance(odd.home_line, (int, float)) and isinstance(fair_home_odds, (int, float)):
                     ev_home = calculate_ev_percentage(odd.home_line, fair_home_odds)
                     if ev_home > 0:
                         plus_ev_bets.append({
+                            'sport': sport,
+                            'line_type': line_type_name,
                             'game': f"{event.away_team.name} @ {event.home_team.name}",
                             'team': event.home_team.name,
-                            'book': sportsbook_names[odd.sportsbook_id],
+                            'book': sportsbook_names.get(odd.sportsbook_id, 'Unknown'),
                             'odds': odd.home_line,
                             'fair_odds': fair_home_odds,
                             'ev': ev_home
                         })
     
-    return plus_ev_bets
+    return sorted(plus_ev_bets, key=lambda x: x['ev'], reverse=True)
 
-def find_arbitrage_opportunities(events: Events) -> List[Dict]:
+
+def find_arbitrage_opportunities(sports_data: Dict[str, Events]) -> List[Dict]:
     arbitrage_opportunities = []
-    for event in events.events:
-        for line_type in [1, 2]:  # Full game and first half
-            moneyline_odds = [odd for odd in event.odds if odd.line_type == line_type]
-            
-            for i in range(len(moneyline_odds)):
-                for j in range(i + 1, len(moneyline_odds)):
-                    arb = calculate_arbitrage(moneyline_odds[i], moneyline_odds[j], event)
-                    if arb:
-                        arbitrage_opportunities.append(arb)
+    for sport, events in sports_data.items():
+        for event in events.events:
+            for line_type in set(odd.line_type for odd in event.odds):
+                moneyline_odds = [odd for odd in event.odds if odd.line_type == line_type]
+                
+                for i in range(len(moneyline_odds)):
+                    for j in range(i + 1, len(moneyline_odds)):
+                        arb = calculate_arbitrage(moneyline_odds[i], moneyline_odds[j], event, sport)
+                        if arb:
+                            arbitrage_opportunities.append(arb)
     
-    return arbitrage_opportunities
+    return sorted(arbitrage_opportunities, key=lambda x: x['profit'], reverse=True)
+
+
 def calculate_ev_percentage(odds: float, fair_odds: float) -> float:
     def odds_to_probability(odds):
         if odds > 0:
@@ -184,20 +210,22 @@ def create_table(events: Events, bet_type: str) -> str:
         all_tables += f'<h3>{away_team} vs {home_team}</h3>'
         all_tables += f'<p>Date: {date} @{location}</p>'
         
-        # Full Game Table
-        all_tables += create_odds_table(event, bet_type, 1, "Full Game")
-        
-        # First Half Table
-        all_tables += create_odds_table(event, bet_type, 2, "First Half")
+        if isinstance(event, NHLEvent):
+            all_tables += create_odds_table(event, bet_type, 1, "NHL Game")
+        else:
+            # Full Game Table
+            all_tables += create_odds_table(event, bet_type, 1, "Full Game")
+            
+            # First Half Table
+            all_tables += create_odds_table(event, bet_type, 2, "First Half")
         
         all_tables += '<hr>'  # Add a horizontal line between events
     
     return all_tables
 
-def calculate_arbitrage(odds1: Odds, odds2: Odds, event: Event) -> Dict:
-    
+def calculate_arbitrage(odds1: Odds, odds2: Odds, event: Event, sport: str) -> Dict:
     def implied_probability(odds):
-        if odds is None:  # Handle None or missing odds
+        if odds is None:
             return None
         try:
             return 1 / (1 + (odds / 100)) if odds > 0 else abs(odds) / (abs(odds) + 100)
@@ -205,26 +233,26 @@ def calculate_arbitrage(odds1: Odds, odds2: Odds, event: Event) -> Dict:
             print(f"Error calculating implied probability for odds {odds}: {e}")
             return None
 
-    book1 = sportsbook_names[odds1.sportsbook_id]
-    book2 = sportsbook_names[odds2.sportsbook_id]
+    book1 = sportsbook_names.get(odds1.sportsbook_id, 'Unknown')
+    book2 = sportsbook_names.get(odds2.sportsbook_id, 'Unknown')
     
     prob1_away = implied_probability(odds1.away_line)
     prob1_home = implied_probability(odds1.home_line)
     prob2_away = implied_probability(odds2.away_line)
     prob2_home = implied_probability(odds2.home_line)
 
-    # Check if any of the probabilities are None
     if None in (prob1_away, prob1_home, prob2_away, prob2_home):
-        # print("One or more implied probabilities are None. Skipping this event.")
         return None
 
-    # Check for arbitrage opportunity
+    line_type_name = get_line_type_name(odds1.line_type)
+
     if (prob1_away + prob2_home < 1) or (prob1_home + prob2_away < 1):
         stake = 100  # Assume $100 total stake
         if prob1_away + prob2_home < 1:
             stake1 = stake * prob2_home / (prob1_away + prob2_home)
             stake2 = stake - stake1
             return {
+                'sport': sport,
                 'game': f"{event.away_team.name} @ {event.home_team.name}",
                 'market': 'Moneyline',
                 'book1': book1,
@@ -235,12 +263,14 @@ def calculate_arbitrage(odds1: Odds, odds2: Odds, event: Event) -> Dict:
                 'odds2': odds2.home_line,
                 'stake2': round(stake2, 2),
                 'team2': event.home_team.name,
-                'profit': round(stake / (prob1_away + prob2_home) - stake, 2)
+                'profit': round(stake / (prob1_away + prob2_home) - stake, 2),
+                'line_type': line_type_name
             }
         else:
             stake1 = stake * prob2_away / (prob1_home + prob2_away)
             stake2 = stake - stake1
             return {
+                'sport': sport,
                 'game': f"{event.away_team.name} @ {event.home_team.name}",
                 'market': 'Moneyline',
                 'book1': book1,
@@ -251,11 +281,22 @@ def calculate_arbitrage(odds1: Odds, odds2: Odds, event: Event) -> Dict:
                 'odds2': odds2.away_line,
                 'stake2': round(stake2, 2),
                 'team2': event.away_team.name,
-                'profit': round(stake / (prob1_home + prob2_away) - stake, 2)
+                'profit': round(stake / (prob1_home + prob2_away) - stake, 2),
+                'line_type': line_type_name
             }
     
     return None
 
+def get_line_type_name(line_type: int) -> str:
+    line_type_map = {
+        1: "Full Game",
+        2: "First Half",
+        3: "Second Half",
+        4: "First Period",
+        5: "Second Period",
+        6: "Third Period"
+    }
+    return line_type_map.get(line_type, f"Unknown ({line_type})")
 
 def create_odds_table(event: Event, bet_type: str, line_type: int, table_title: str) -> str:
     table = f'<h4>{table_title}</h4>'
@@ -265,14 +306,22 @@ def create_odds_table(event: Event, bet_type: str, line_type: int, table_title: 
         table += f'<th>{name}</th>'
     table += '</tr>'
 
-    # Away team row
     table += create_team_row(event, "away", bet_type, line_type)
-
-    # Home team row
     table += create_team_row(event, "home", bet_type, line_type)
+
+    if isinstance(event, NHLEvent):
+        table += create_nhl_period_rows(event, bet_type)
 
     table += '</table>'
     return table
+
+def create_nhl_period_rows(event: NHLEvent, bet_type: str) -> str:
+    rows = ""
+    for period in range(1, 4):
+        rows += f'<tr><td colspan="{len(sportsbook_names) + 2}" style="text-align: center; font-weight: bold; background-color: #f0f0f0;">Period {period}</td></tr>'
+        rows += create_team_row(event, "away", bet_type, period + 3)
+        rows += create_team_row(event, "home", bet_type, period + 3)
+    return rows
 
 def create_team_row(event: Event, team: str, bet_type: str, line_type: int) -> str:
     team_name = event.away_team.name if team == "away" else event.home_team.name
@@ -332,6 +381,7 @@ def calculate_fair_odds(team, event: Event, pinnacle_id: int, line_type: int) ->
 
     return calculate_no_vig_odds(team, away_odds, home_odds)
 
+
 def calculate_no_vig_odds(team, away_odds, home_odds):
     def american_to_decimal(american_odds):
         if american_odds is None:
@@ -378,7 +428,8 @@ def generate_html(sports_data: Dict[str, Events]) -> str:
         <style>
             .highlight-green { background-color: #d4f4d7; }
             body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f0f0f0; }
-            .container { max-width: 1200px; margin: 0 auto; background-color: white; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); overflow: hidden; }
+            .container { max-width: 95%; margin: 0 auto; background-color: white; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); overflow: hidden; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 14px; }
             h1, h2, h3, h4 { text-align: center; padding: 10px 0; margin: 0; background-color: #f0f0f0; }
             .tabs { display: flex; background-color: #e0e0e0; }
             .tab { padding: 15px 20px; cursor: pointer; flex-grow: 1; text-align: center; transition: background-color 0.3s; }
@@ -386,7 +437,6 @@ def generate_html(sports_data: Dict[str, Events]) -> str:
             .tab.active { background-color: #c0c0c0; font-weight: bold; }
             .content { display: none; padding: 20px; }
             .content.active { display: block; }
-            table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
             th, td { border: 1px solid #ddd; padding: 12px; text-align: center; }
             th { background-color: #f2f2f2; font-weight: bold; }
             tr:nth-child(even) { background-color: #f9f9f9; }
@@ -435,6 +485,8 @@ def generate_html(sports_data: Dict[str, Events]) -> str:
             <h2>Plus EV Bets</h2>
             <table>
                 <tr>
+                    <th>Sport</th>
+                    <th>Line Type</th>
                     <th>Game</th>
                     <th>Team</th>
                     <th>Book</th>
@@ -443,29 +495,31 @@ def generate_html(sports_data: Dict[str, Events]) -> str:
                     <th>EV%</th>
                 </tr>
     """
-
-    all_plus_ev_bets = []
-    for events in sports_data.values():
-        all_plus_ev_bets.extend(find_plus_ev_bets(events))
-
+    
+    all_plus_ev_bets = find_plus_ev_bets(sports_data)
+    
     for bet in all_plus_ev_bets:
         html += f"""
             <tr>
+                <td>{bet['sport']}</td>
+                <td>{bet['line_type']}</td>
                 <td>{bet['game']}</td>
                 <td>{bet['team']}</td>
                 <td>{bet['book']}</td>
                 <td>{bet['odds']}</td>
                 <td>{bet['fair_odds']}</td>
-                <td>{bet['ev']}%</td>
+                <td>{bet['ev']}%</td>               
             </tr>
         """
-
+    
     html += """
             </table>
             
             <h2>Arbitrage Opportunities</h2>
             <table>
                 <tr>
+                    <th>Sport</th>
+                    <th>Line Type</th>
                     <th>Game</th>
                     <th>Market</th>
                     <th>Book 1</th>
@@ -476,17 +530,17 @@ def generate_html(sports_data: Dict[str, Events]) -> str:
                     <th>Team 2</th>
                     <th>Odds 2</th>
                     <th>Stake 2</th>
-                    <th>Profit</th>
+                    <th>Profit</th>                    
                 </tr>
     """
-
-    all_arbitrage_opportunities = []
-    for events in sports_data.values():
-        all_arbitrage_opportunities.extend(find_arbitrage_opportunities(events))
-
+    
+    all_arbitrage_opportunities = find_arbitrage_opportunities(sports_data)
+    
     for arb in all_arbitrage_opportunities:
         html += f"""
             <tr>
+                <td>{arb['sport']}</td>
+                <td>{arb['line_type']}</td>
                 <td>{arb['game']}</td>
                 <td>{arb['market']}</td>
                 <td>{arb['book1']}</td>
@@ -497,7 +551,7 @@ def generate_html(sports_data: Dict[str, Events]) -> str:
                 <td>{arb['team2']}</td>
                 <td>{arb['odds2']}</td>
                 <td>${arb['stake2']}</td>
-                <td>${arb['profit']}</td>
+                <td>${arb['profit']}</td>                
             </tr>
         """
 
@@ -540,7 +594,6 @@ def generate_html(sports_data: Dict[str, Events]) -> str:
                 });
             }
 
-            // Show the first sport by default
             showSport(Object.keys(sports_data)[0]);
             highlightBestOdds();
         </script>
