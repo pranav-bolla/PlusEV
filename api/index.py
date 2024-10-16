@@ -606,7 +606,7 @@ def generate_html(sports_data: Dict[str, Events]) -> str:
    
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
-        cfb_url = "https://www.lunosoftware.com/sportsdata/SportsDataService.svc/gamesOddsForDateWeek/3?&sportsbookIDList=1,5,89,83,28,87,85"
+        # cfb_url = "https://www.lunosoftware.com/sportsdata/SportsDataService.svc/gamesOddsForDateWeek/3?&sportsbookIDList=1,5,89,83,28,87,85"
         nfl_url = "https://www.lunosoftware.com/sportsdata/SportsDataService.svc/gamesOddsForDateWeek/2?&sportsbookIDList=1,5,89,83,28,87,85"
         mlb_url = "https://www.lunosoftware.com/sportsdata/SportsDataService.svc/gamesOddsForDateWeek/1?&sportsbookIDList=1,5,89,83,28,87,85"
         nhl_url = "https://www.lunosoftware.com/sportsdata/SportsDataService.svc/gamesOddsForDateWeek/6?&sportsbookIDList=1,89,83,28,87,85,8,86,98,100,101,139"
