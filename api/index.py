@@ -609,11 +609,13 @@ class handler(BaseHTTPRequestHandler):
         cfb_url = "https://www.lunosoftware.com/sportsdata/SportsDataService.svc/gamesOddsForDateWeek/3?&sportsbookIDList=1,5,89,83,28,87,85"
         nfl_url = "https://www.lunosoftware.com/sportsdata/SportsDataService.svc/gamesOddsForDateWeek/2?&sportsbookIDList=1,5,89,83,28,87,85"
         mlb_url = "https://www.lunosoftware.com/sportsdata/SportsDataService.svc/gamesOddsForDateWeek/1?&sportsbookIDList=1,5,89,83,28,87,85"
+        nhl_url = "https://www.lunosoftware.com/sportsdata/SportsDataService.svc/gamesOddsForDateWeek/6?&sportsbookIDList=1,89,83,28,87,85,8,86,98,100,101,139"
 
         sports_data = {
-            'CFB': fetch_sports_data(cfb_url, CFBEvents),
+            # 'CFB': fetch_sports_data(cfb_url, CFBEvents),
             'NFL': fetch_sports_data(nfl_url, NFLEvents),
-            'MLB': fetch_sports_data(mlb_url, MLBEvents)
+            'MLB': fetch_sports_data(mlb_url, MLBEvents),
+            'NHL': fetch_sports_data(nhl_url, NHLEvents)
         }
 
         html_content = generate_html(sports_data)
