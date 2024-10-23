@@ -103,6 +103,17 @@ class NHLEvent(Event):
 class NHLEvents(Events):
     def add_event(self, event_data: Dict):
         self.events.append(NHLEvent(event_data))
+        
+class NBAEvent(Event):
+    def __init__(self, event_data: Dict):
+        super().__init__(event_data)
+        self.season_type = event_data.get('SeasonType')
+        self.quarter = event_data.get('Period')
+        self.quarter_number = event_data.get('PeriodNumber')
+
+class NBAEvents(Events):
+    def add_event(self, event_data: Dict):
+        self.events.append(NBAEvent(event_data))
 
 def fetch_sports_data(url: str, event_class: type) -> Events:
     response = requests.get(url)
@@ -445,11 +456,63 @@ def generate_html(sports_data: Dict[str, Events]) -> str:
             td.team-name { width: 150px; text-align: left;}
             .bottom-tables { margin-top: 20px; }
             .bottom-tables table { margin-bottom: 40px; }
+            .sportsbook-filter {
+                background-color: white;
+                padding: 15px;
+                margin: 10px 0;
+                border-radius: 5px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+            .sportsbook-filter label {
+                margin-right: 15px;
+                cursor: pointer;
+                display: inline-flex;
+                align-items: center;
+            }
+            .sportsbook-filter input[type="checkbox"] {
+                margin-right: 5px;
+            }
+            .filter-controls {
+                margin-bottom: 10px;
+            }
+            .filter-controls button {
+                margin-right: 10px;
+                padding: 5px 10px;
+                border: none;
+                border-radius: 3px;
+                background-color: #e0e0e0;
+                cursor: pointer;
+            }
+            .filter-controls button:hover {
+                background-color: #d0d0d0;
+            }
+            .hidden-row {
+                display: none;
+            }
         </style>
     </head>
     <body>
         <div class="container">
             <h1>Sports Odds</h1>
+            
+            <div class="sportsbook-filter">
+                <div class="filter-controls">
+                    <button onclick="selectAllSportsbooks()">Select All</button>
+                    <button onclick="deselectAllSportsbooks()">Deselect All</button>
+                </div>
+    """
+    
+    # Add checkboxes for each sportsbook
+    for id, name in sportsbook_names.items():
+        html += f"""
+                <label>
+                    <input type="checkbox" name="sportsbook" value="{name}" checked onchange="filterTables()">
+                    {name}
+                </label>
+        """
+    
+    html += """
+            </div>
             <div class="tabs" id="sportTabs">
     """
 
@@ -483,7 +546,7 @@ def generate_html(sports_data: Dict[str, Events]) -> str:
         </div>
         <div class="bottom-tables">
             <h2>Plus EV Bets</h2>
-            <table>
+            <table id="plus-ev-table">
                 <tr>
                     <th>Sport</th>
                     <th>Line Type</th>
@@ -500,7 +563,7 @@ def generate_html(sports_data: Dict[str, Events]) -> str:
     
     for bet in all_plus_ev_bets:
         html += f"""
-            <tr>
+            <tr data-book="{bet['book']}">
                 <td>{bet['sport']}</td>
                 <td>{bet['line_type']}</td>
                 <td>{bet['game']}</td>
@@ -516,7 +579,7 @@ def generate_html(sports_data: Dict[str, Events]) -> str:
             </table>
             
             <h2>Arbitrage Opportunities</h2>
-            <table>
+            <table id="arbitrage-table">
                 <tr>
                     <th>Sport</th>
                     <th>Line Type</th>
@@ -538,7 +601,7 @@ def generate_html(sports_data: Dict[str, Events]) -> str:
     
     for arb in all_arbitrage_opportunities:
         html += f"""
-            <tr>
+            <tr data-book1="{arb['book1']}" data-book2="{arb['book2']}">
                 <td>{arb['sport']}</td>
                 <td>{arb['line_type']}</td>
                 <td>{arb['game']}</td>
@@ -594,6 +657,39 @@ def generate_html(sports_data: Dict[str, Events]) -> str:
                 });
             }
 
+            function selectAllSportsbooks() {
+                document.querySelectorAll('input[name="sportsbook"]').forEach(checkbox => {
+                    checkbox.checked = true;
+                });
+                filterTables();
+            }
+
+            function deselectAllSportsbooks() {
+                document.querySelectorAll('input[name="sportsbook"]').forEach(checkbox => {
+                    checkbox.checked = false;
+                });
+                filterTables();
+            }
+
+            function filterTables() {
+                const selectedBooks = Array.from(document.querySelectorAll('input[name="sportsbook"]:checked'))
+                    .map(checkbox => checkbox.value);
+
+                // Filter Plus EV table
+                document.querySelectorAll('#plus-ev-table tr:not(:first-child)').forEach(row => {
+                    const book = row.getAttribute('data-book');
+                    row.classList.toggle('hidden-row', !selectedBooks.includes(book));
+                });
+
+                // Filter Arbitrage table
+                document.querySelectorAll('#arbitrage-table tr:not(:first-child)').forEach(row => {
+                    const book1 = row.getAttribute('data-book1');
+                    const book2 = row.getAttribute('data-book2');
+                    row.classList.toggle('hidden-row', 
+                        !selectedBooks.includes(book1) || !selectedBooks.includes(book2));
+                });
+            }
+
             showSport(Object.keys(sports_data)[0]);
             highlightBestOdds();
         </script>
@@ -608,13 +704,16 @@ class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         # cfb_url = "https://www.lunosoftware.com/sportsdata/SportsDataService.svc/gamesOddsForDateWeek/3?&sportsbookIDList=1,5,89,83,28,87,85,8,86,98,100,101,139"
         nfl_url = "https://www.lunosoftware.com/sportsdata/SportsDataService.svc/gamesOddsForDateWeek/2?&sportsbookIDList=1,5,89,83,28,87,85,8,86,98,100,101,139"
-        mlb_url = "https://www.lunosoftware.com/sportsdata/SportsDataService.svc/gamesOddsForDateWeek/1?&sportsbookIDList=1,5,89,83,28,87,85,8,86,98,100,101,139"
+        # mlb_url = "https://www.lunosoftware.com/sportsdata/SportsDataService.svc/gamesOddsForDateWeek/1?&sportsbookIDList=1,5,89,83,28,87,85,8,86,98,100,101,139"
         nhl_url = "https://www.lunosoftware.com/sportsdata/SportsDataService.svc/gamesOddsForDateWeek/6?&sportsbookIDList=1,89,83,28,87,85,8,86,98,100,101,139"
+        nba_url = "https://www.lunosoftware.com/sportsdata/SportsDataService.svc/gamesOddsForDateWeek/4?&sportsbookIDList=1,89,83,28,87,85,8,86,98,100,101,139"
+
 
         sports_data = {
             # 'CFB': fetch_sports_data(cfb_url, CFBEvents),
             'NFL': fetch_sports_data(nfl_url, NFLEvents),
-            'MLB': fetch_sports_data(mlb_url, MLBEvents),
+            # 'MLB': fetch_sports_data(mlb_url, MLBEvents),
+            'NBA': fetch_sports_data(nba_url, NBAEvents),
             'NHL': fetch_sports_data(nhl_url, NHLEvents)
         }
 
