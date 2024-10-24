@@ -138,7 +138,8 @@ sportsbook_names = {
     98: 'Bet99',
     100: 'BetVictor',
     101: 'Betano',
-    139: 'theScore'
+    139: 'theScore',
+    119: 'Fanatics'
 }
 
 def find_plus_ev_bets(sports_data: Dict[str, Events]) -> List[Dict]:
@@ -702,11 +703,11 @@ def generate_html(sports_data: Dict[str, Events]) -> str:
    
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
-        # cfb_url = "https://www.lunosoftware.com/sportsdata/SportsDataService.svc/gamesOddsForDateWeek/3?&sportsbookIDList=1,5,89,83,28,87,85,8,86,98,100,101,139"
-        nfl_url = "https://www.lunosoftware.com/sportsdata/SportsDataService.svc/gamesOddsForDateWeek/2?&sportsbookIDList=1,5,89,83,28,87,85,8,86,98,100,101,139"
-        # mlb_url = "https://www.lunosoftware.com/sportsdata/SportsDataService.svc/gamesOddsForDateWeek/1?&sportsbookIDList=1,5,89,83,28,87,85,8,86,98,100,101,139"
-        nhl_url = "https://www.lunosoftware.com/sportsdata/SportsDataService.svc/gamesOddsForDateWeek/6?&sportsbookIDList=1,89,83,28,87,85,8,86,98,100,101,139"
-        nba_url = "https://www.lunosoftware.com/sportsdata/SportsDataService.svc/gamesOddsForDateWeek/4?&sportsbookIDList=1,89,83,28,87,85,8,86,98,100,101,139"
+        # cfb_url = "https://www.lunosoftware.com/sportsdata/SportsDataService.svc/gamesOddsForDateWeek/3?&sportsbookIDList=1,89,83,28,87,85,8,86,98,100,101,139,119"
+        nfl_url = "https://www.lunosoftware.com/sportsdata/SportsDataService.svc/gamesOddsForDateWeek/2?&sportsbookIDList=1,89,83,28,87,85,8,86,98,100,101,139,119"
+        # mlb_url = "https://www.lunosoftware.com/sportsdata/SportsDataService.svc/gamesOddsForDateWeek/1?&sportsbookIDList=1,89,83,28,87,85,8,86,98,100,101,139,119"
+        nhl_url = "https://www.lunosoftware.com/sportsdata/SportsDataService.svc/gamesOddsForDateWeek/6?&sportsbookIDList=1,89,83,28,87,85,8,86,98,100,101,139,119"
+        nba_url = "https://www.lunosoftware.com/sportsdata/SportsDataService.svc/gamesOddsForDateWeek/4?&sportsbookIDList=1,89,83,28,87,85,8,86,98,100,101,139,119"
 
 
         sports_data = {
