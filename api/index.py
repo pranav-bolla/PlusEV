@@ -7,6 +7,7 @@ from typing import List, Dict
 import math
 import os
 
+
 class Odds:
     def __init__(self, odds_data: Dict):
         self.sportsbook_id = odds_data.get('SportsbookID')
@@ -693,7 +694,12 @@ def generate_html(sports_data: Dict[str, Events]) -> str:
 
             showSport(Object.keys(sports_data)[0]);
             highlightBestOdds();
+            
         </script>
+        <script>
+            window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+        </script>
+        <script defer src="/_vercel/insights/script.js"></script>
     </body>
     </html>
     """
